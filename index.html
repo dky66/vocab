@@ -471,16 +471,47 @@ function answer(action) {
   saveWords(); saveSess();
   cardFlipped = false;
   renderStudy();
+  // Speak next word immediately (still inside user gesture → works on Android) ✓
+  if (settings.autoPlay) { const nw = currentWord(); if (nw) speak(nw.english); }
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SPEECH
+//  SPEECH  (Android Chrome compatible)
 // ─────────────────────────────────────────────────────────────
+let _audioUnlocked = false;
+let _voicesLoaded  = false;
+
+// Load voices (needed for Android Chrome)
+function _loadVoices() {
+  if (window.speechSynthesis.getVoices().length > 0) _voicesLoaded = true;
+}
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => { _voicesLoaded = true; };
+  _loadVoices();
+}
+
+// Unlock audio on first user touch (Android requires this)
+function _unlockAudio() {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  const u = new SpeechSynthesisUtterance('');
+  window.speechSynthesis.speak(u);
+}
+document.addEventListener('touchstart', _unlockAudio, { once: true });
+document.addEventListener('click',      _unlockAudio, { once: true });
+
 function speak(text) {
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window) || !text) return;
+  _unlockAudio();
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'en-US'; u.rate = 0.88;
+  // Pick an English voice explicitly (helps Android Chrome)
+  const voices = window.speechSynthesis.getVoices();
+  const v = voices.find(x => x.lang === 'en-US') ||
+            voices.find(x => x.lang.startsWith('en')) ||
+            null;
+  if (v) u.voice = v;
   window.speechSynthesis.speak(u);
 }
 
@@ -567,7 +598,7 @@ function renderStudy() {
       </div>
     </div>`;
 
-  if (settings.autoPlay) setTimeout(()=>speak(word.english), 350);
+  // autoPlay is now called from gesture handlers directly
 }
 
 function flipCard() {
@@ -575,6 +606,10 @@ function flipCard() {
   document.getElementById('card-inner')?.classList.toggle('flipped', cardFlipped);
   const area = document.getElementById('ans-area');
   if (area) area.style.display = cardFlipped ? 'block' : 'none';
+  // Speak when flipping to FRONT (showing new word) — triggered by user gesture ✓
+  if (!cardFlipped && settings.autoPlay) {
+    const w = currentWord(); if (w) speak(w.english);
+  }
 }
 
 function continueMore() {
