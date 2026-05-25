@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>背单词</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --green: #16a34a;
+      --blue: #2563eb;
+      --amber: #d97706;
+      --red: #dc2626;
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-sub: #64748b;
+      --border: #e2e8f0;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .header-title { font-size: 18px; font-weight: 800; color: var(--primary); letter-spacing: -.3px; }
+
+    /* ── Bottom nav ── */
+    .nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: white; border-top: 1px solid var(--border);
+      display: flex; z-index: 100;
+      box-shadow: 0 -2px 10px rgba(0,0,0,.06);
+    }
+    .nav-btn {
+      flex: 1; padding: 10px 4px 8px; border: none; background: none;
+      color: var(--text-sub); font-size: 11px; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      transition: color .2s;
+    }
+    .nav-btn svg { width: 22px; height: 22px; }
+    .nav-btn.active { color: var(--primary); font-weight: 700; }
+
+    /* ── Main ── */
+    .main {
+      flex: 1; padding: 16px 16px 90px;
+      max-width: 520px; margin: 0 auto; width: 100%;
+    }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Card ── */
+    .card-wrap { perspective: 1000px; height: 230px; margin: 14px 0; cursor: pointer; }
+    .card-inner {
+      position: relative; width: 100%; height: 100%;
+      transition: transform .5s cubic-bezier(.4,0,.2,1);
+      transform-style: preserve-3d;
+    }
+    .card-inner.flipped { transform: rotateY(180deg); }
+    .card-face {
+      position: absolute; inset: 0; backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 20px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 28px 24px;
+      box-shadow: 0 8px 32px rgba(99,102,241,.18);
+    }
+    .card-front { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+    .card-back { background: white; transform: rotateY(180deg); border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+
+    .word-main { font-size: 42px; font-weight: 800; color: white; text-align: center; line-height: 1.1; }
+    .word-hint { font-size: 13px; color: rgba(255,255,255,.6); margin-top: 10px; }
+    .meaning-word { font-size: 14px; color: var(--text-sub); margin-bottom: 8px; font-weight: 500; }
+    .meaning-main { font-size: 24px; font-weight: 700; color: var(--text); text-align: center; }
+
+    .speak-btn {
+      margin-top: 14px; width: 40px; height: 40px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.4); background: rgba(255,255,255,.15);
+      color: white; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; transition: all .2s;
+    }
+    .speak-btn:hover { background: rgba(255,255,255,.3); }
+    .speak-btn.dark { border-color: var(--border); background: var(--bg); color: var(--primary); }
+    .speak-btn.dark:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* ── Answer buttons ── */
+    .answer-area { margin-top: 6px; }
+    .answer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ans-btn {
+      padding: 14px 10px; border-radius: var(--radius); border: none;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      transition: transform .12s, filter .12s;
+    }
+    .ans-btn small { font-size: 11px; font-weight: 400; opacity: .75; }
+    .ans-btn:active { transform: scale(.95); filter: brightness(.95); }
+    .ans-known { background: #dcfce7; color: #15803d; }
+    .ans-easy  { background: #dbeafe; color: #1d4ed8; }
+    .ans-hard  { background: #fef3c7; color: #b45309; }
+    .ans-rep   { background: #fee2e2; color: #b91c1c; }
+
+    /* ── Progress ── */
+    .progress-bar { background: var(--border); border-radius: 99px; height: 7px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--primary); border-radius: 99px; transition: width .3s; }
+    .progress-info { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); margin-top: 5px; }
+
+    /* ── Today stats row ── */
+    .day-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 14px; }
+    .day-stat { background: white; border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+    .day-stat-val { font-size: 20px; font-weight: 800; }
+    .day-stat-lbl { font-size: 10px; color: var(--text-sub); margin-top: 2px; }
+
+    /* ── Completion ── */
+    .done-screen { text-align: center; padding: 40px 10px; }
+    .done-icon { font-size: 64px; margin-bottom: 16px; }
+    .done-screen h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+    .done-screen p { color: var(--text-sub); margin-bottom: 24px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 11px 22px; border-radius: 12px; border: none;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-ghost { background: white; border: 1.5px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 9px; }
+    .btn-danger { background: #fef2f2; color: var(--red); border: 1.5px solid #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+
+    /* ── Section title ── */
+    .sec-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-sub); margin: 20px 0 10px;
+    }
+
+    /* ── Stats grid ── */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 4px; }
+    .stat-card { background: white; border-radius: var(--radius); padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+    .stat-val { font-size: 30px; font-weight: 800; }
+    .stat-lbl { font-size: 12px; color: var(--text-sub); margin-top: 3px; }
+
+    /* ── Word bank ── */
+    .search-wrap { position: relative; margin-bottom: 12px; }
+    .search-wrap svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text-sub); pointer-events: none; }
+    .search-input {
+      width: 100%; padding: 10px 14px 10px 40px;
+      border: 1.5px solid var(--border); border-radius: 12px;
+      font-size: 14px; outline: none; background: white;
+      transition: border-color .2s;
+    }
+    .search-input:focus { border-color: var(--primary); }
+
+    .word-list { display: flex; flex-direction: column; gap: 8px; }
+    .word-item {
+      background: white; border-radius: 12px; padding: 13px 14px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.05);
+    }
+    .word-info { flex: 1; min-width: 0; }
+    .word-en { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .word-cn { font-size: 13px; color: var(--text-sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge {
+      flex-shrink: 0; font-size: 11px; font-weight: 700;
+      padding: 3px 8px; border-radius: 99px;
+    }
+    .badge-new      { background: #f1f5f9; color: #64748b; }
+    .badge-learning { background: #fef3c7; color: #b45309; }
+    .badge-known    { background: #dcfce7; color: #15803d; }
+
+    .icon-btn {
+      flex-shrink: 0; background: none; border: none; padding: 6px;
+      cursor: pointer; color: var(--text-sub); border-radius: 8px;
+      transition: all .15s;
+    }
+    .icon-btn:hover { background: var(--bg); color: var(--text); }
+    .icon-btn.danger:hover { background: #fee2e2; color: var(--red); }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed; bottom: 76px; right: 18px;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--primary); color: white; border: none;
+      font-size: 26px; cursor: pointer; display: none;
+      align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(99,102,241,.4);
+      transition: all .2s; z-index: 90;
+    }
+    .fab:hover { transform: scale(1.07); background: var(--primary-dark); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 200;
+      align-items: flex-end; justify-content: center;
+    }
+    .modal {
+      background: white; border-radius: 24px 24px 0 0;
+      padding: 28px 24px 32px; width: 100%; max-width: 520px;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal h3 { font-size: 19px; font-weight: 800; margin-bottom: 22px; }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .form-input {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid var(--border); border-radius: 12px;
+      font-size: 15px; outline: none; transition: border-color .2s;
+    }
+    .form-input:focus { border-color: var(--primary); }
+    .form-input.err { border-color: var(--red); }
+    .form-error { font-size: 12px; color: var(--red); margin-top: 5px; display: none; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+    .modal-actions .btn { flex: 1; }
+
+    /* ── Settings ── */
+    .setting-row {
+      background: white; border-radius: var(--radius); padding: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 1px 6px rgba(0,0,0,.05); margin-bottom: 10px;
+    }
+    .setting-lbl { font-size: 15px; font-weight: 600; }
+    .setting-sub { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+    .num-wrap { display: flex; align-items: center; gap: 10px; }
+    .num-btn {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 1.5px solid var(--border); background: white;
+      font-size: 18px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all .15s;
+    }
+    .num-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .num-val { font-size: 20px; font-weight: 800; min-width: 34px; text-align: center; }
+    .toggle {
+      width: 48px; height: 28px; background: var(--border);
+      border-radius: 99px; position: relative; cursor: pointer;
+      border: none; transition: background .2s; flex-shrink: 0;
+    }
+    .toggle.on { background: var(--primary); }
+    .toggle::after {
+      content: ''; position: absolute; width: 22px; height: 22px;
+      background: white; border-radius: 50%; top: 3px; left: 3px;
+      transition: transform .2s; box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    }
+    .toggle.on::after { transform: translateX(20px); }
+
+    /* ── History row ── */
+    .hist-row {
+      background: white; border-radius: 12px; padding: 13px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; box-shadow: 0 1px 6px rgba(0,0,0,.04);
+    }
+    .hist-date { font-size: 14px; font-weight: 600; }
+    .hist-sub { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+    .hist-nums { text-align: right; font-size: 12px; color: var(--text-sub); }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 50px 20px; color: var(--text-sub); }
+    .empty svg { width: 60px; height: 60px; opacity: .3; margin-bottom: 14px; }
+    .empty h3 { font-size: 16px; color: var(--text); margin-bottom: 6px; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; top: 68px; left: 50%;
+      transform: translateX(-50%) translateY(-16px);
+      background: #1e293b; color: white;
+      padding: 10px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 500;
+      opacity: 0; pointer-events: none;
+      transition: all .3s; z-index: 400; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Tag chip ── */
+    .tag {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      padding: 3px 9px; border-radius: 99px;
+    }
+    .tag-new      { background: #f1f5f9; color: #64748b; }
+    .tag-review   { background: #fef3c7; color: #b45309; }
+    .tag-repeat   { background: #fee2e2; color: #b91c1c; }
+
+    /* ── Flip hint ── */
+    .flip-hint { font-size: 12px; color: var(--text-sub); text-align: right; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <span class="header-title">📚 背单词</span>
+</header>
+
+<main class="main">
+  <div id="view-study"    class="view active"></div>
+  <div id="view-wordbank" class="view">
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="search-input" type="text" placeholder="搜索单词…" oninput="renderWordBank()">
+    </div>
+    <div id="word-list"></div>
+  </div>
+  <div id="view-stats"    class="view"></div>
+  <div id="view-settings" class="view"></div>
+</main>
+
+<nav class="nav">
+  <button class="nav-btn active" id="nb-study"    onclick="showView('study')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    学习
+  </button>
+  <button class="nav-btn" id="nb-wordbank" onclick="showView('wordbank')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    单词本
+  </button>
+  <button class="nav-btn" id="nb-stats" onclick="showView('stats')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    统计
+  </button>
+  <button class="nav-btn" id="nb-settings" onclick="showView('settings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    设置
+  </button>
+</nav>
+
+<button class="fab" id="fab" onclick="openAddModal()">+</button>
+
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal-box" onclick="event.stopPropagation()"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  CONSTANTS & STATE
+// ─────────────────────────────────────────────────────────────
+const KEY = { WORDS:'vw', SETTINGS:'vs', SESSION:'vsess', HIST:'vhist' };
+const ST = { NEW:'new', LEARNING:'learning', KNOWN:'known' };
+
+let words    = [];
+let settings = { dailyNew: 20, autoPlay: true };
+let session  = { date:'', queue:[], repeatIds:[], done:[], newLearned:0, stats:{known:0,easy:0,hard:0,repeat:0} };
+let history  = [];
+let currentView = 'study';
+let cardFlipped = false;
+
+// ─────────────────────────────────────────────────────────────
+//  STORAGE
+// ─────────────────────────────────────────────────────────────
+const save  = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+const load  = (k,fb) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch{ return fb; } };
+
+function loadAll() {
+  words    = load(KEY.WORDS, []);
+  settings = { ...settings, ...load(KEY.SETTINGS, {}) };
+  session  = { ...session,  ...load(KEY.SESSION,  {}) };
+  history  = load(KEY.HIST, []);
+}
+function saveWords()   { save(KEY.WORDS, words); }
+function saveSett()    { save(KEY.SETTINGS, settings); }
+function saveSess()    { save(KEY.SESSION, session); }
+function saveHist()    { save(KEY.HIST, history); }
+
+// ─────────────────────────────────────────────────────────────
+//  DATE HELPERS
+// ─────────────────────────────────────────────────────────────
+const todayStr  = () => new Date().toISOString().slice(0,10);
+const addDays   = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); };
+const isDue     = d => !d || d <= todayStr();
+
+// ─────────────────────────────────────────────────────────────
+//  SESSION MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+function initSession() {
+  const t = todayStr();
+  if (session.date !== t) {
+    // Archive yesterday
+    if (session.date && Object.values(session.stats).some(v=>v>0)) {
+      const idx = history.findIndex(h=>h.date===session.date);
+      const entry = { date: session.date, done: session.done.length, newLearned: session.newLearned, stats: {...session.stats} };
+      if (idx>=0) history[idx]=entry; else history.push(entry);
+      saveHist();
+    }
+    session = { date:t, queue:[], repeatIds:[], done:[], newLearned:0, stats:{known:0,easy:0,hard:0,repeat:0} };
+    buildQueue(false);
+    saveSess();
+  }
+  // Sanity: remove queued IDs that no longer exist
+  const ids = new Set(words.map(w=>w.id));
+  session.queue     = session.queue.filter(id=>ids.has(id));
+  session.repeatIds = session.repeatIds.filter(id=>ids.has(id));
+  session.done      = session.done.filter(id=>ids.has(id));
+}
+
+function buildQueue(extra) {
+  const t = todayStr();
+  const dueReview = words.filter(w => w.status===ST.LEARNING && isDue(w.nextReview) && !session.done.includes(w.id) && !session.queue.includes(w.id));
+  const newLimit  = extra ? settings.dailyNew : Math.max(0, settings.dailyNew - session.newLearned);
+  const newBatch  = words.filter(w => w.status===ST.NEW && !session.done.includes(w.id) && !session.queue.includes(w.id)).slice(0, newLimit);
+  const combined  = [...dueReview.map(w=>w.id), ...newBatch.map(w=>w.id)];
+  shuffle(combined);
+  if (extra) session.queue = [...session.queue, ...combined];
+  else       session.queue = combined;
+}
+
+function shuffle(a) {
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function currentWord() {
+  for(const id of session.queue){ const w=words.find(x=>x.id===id); if(w) return w; }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ANSWER HANDLER
+// ─────────────────────────────────────────────────────────────
+function answer(action) {
+  if(!session.queue.length) return;
+  const id   = session.queue[0];
+  const word = words.find(w=>w.id===id);
+  if(!word){ session.queue.shift(); saveSess(); renderStudy(); return; }
+
+  const wasNew     = word.status === ST.NEW;
+  const isFirstTime= !session.done.includes(id);
+
+  // Remove from front of queue
+  session.queue.shift();
+  session.repeatIds = session.repeatIds.filter(x=>x!==id);
+
+  if (action === 'repeat') {
+    const max = Math.min(session.queue.length, 5);
+    const pos = max > 0 ? Math.floor(Math.random()*max)+1 : 0;
+    session.queue.splice(pos, 0, id);
+    session.repeatIds.push(id);
+    session.stats.repeat++;
+  } else {
+    if (isFirstTime) {
+      session.done.push(id);
+      if (wasNew) session.newLearned++;
+    }
+    const t = todayStr();
+    if      (action==='known') { word.status=ST.KNOWN;    word.nextReview=null;          session.stats.known++; }
+    else if (action==='easy')  { word.status=ST.LEARNING; word.nextReview=addDays(t,2);  session.stats.easy++;  }
+    else if (action==='hard')  { word.status=ST.LEARNING; word.nextReview=addDays(t,1);  session.stats.hard++;  }
+  }
+
+  saveWords(); saveSess();
+  cardFlipped = false;
+  renderStudy();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SPEECH
+// ─────────────────────────────────────────────────────────────
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US'; u.rate = 0.88;
+  window.speechSynthesis.speak(u);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER: STUDY
+// ─────────────────────────────────────────────────────────────
+function renderStudy() {
+  cardFlipped = false;
+  const el   = document.getElementById('view-study');
+  const word = currentWord();
+  const done = session.done.length;
+  const rem  = session.queue.length;
+  const total= done + rem;
+  const pct  = total>0 ? Math.round(done/total*100) : 0;
+
+  const dayStats = `
+    <div class="day-stats">
+      <div class="day-stat"><div class="day-stat-val" style="color:#15803d">${session.stats.known}</div><div class="day-stat-lbl">认识</div></div>
+      <div class="day-stat"><div class="day-stat-val" style="color:#1d4ed8">${session.stats.easy}</div><div class="day-stat-lbl">简单</div></div>
+      <div class="day-stat"><div class="day-stat-val" style="color:#b45309">${session.stats.hard}</div><div class="day-stat-lbl">困难</div></div>
+      <div class="day-stat"><div class="day-stat-val" style="color:#b91c1c">${session.stats.repeat}</div><div class="day-stat-lbl">重复</div></div>
+    </div>`;
+
+  const progress = `
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="progress-info"><span>${done} / ${total} 已完成</span><span>${rem} 待学</span></div>`;
+
+  if (!word) {
+    const hasMore = words.filter(w=>w.status===ST.NEW && !session.done.includes(w.id) && !session.queue.includes(w.id)).length > 0;
+    el.innerHTML = dayStats + progress + `
+      <div class="done-screen">
+        <div class="done-icon">🎉</div>
+        <h2>今日任务完成！</h2>
+        <p>共完成 ${done} 个单词</p>
+        ${hasMore
+          ? `<button class="btn btn-primary" onclick="continueMore()">继续多学 ${settings.dailyNew} 个</button>`
+          : `<p style="color:var(--text-sub);font-size:14px">单词本里没有更多新词了，去添加新词吧！</p>`
+        }
+      </div>`;
+    return;
+  }
+
+  const isRep  = session.repeatIds.includes(word.id);
+  const isNew  = word.status === ST.NEW;
+  const tagHtml= isRep
+    ? `<span class="tag tag-repeat">🔁 重复中</span>`
+    : isNew
+      ? `<span class="tag tag-new">🆕 新词</span>`
+      : `<span class="tag tag-review">📖 复习</span>`;
+
+  const en = esc(word.english);
+  const cn = esc(word.chinese);
+
+  el.innerHTML = dayStats + progress + `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px">
+      ${tagHtml}
+      <span class="flip-hint">点击卡片翻转 →</span>
+    </div>
+
+    <div class="card-wrap" id="card-wrap" onclick="flipCard()">
+      <div class="card-inner" id="card-inner">
+        <div class="card-face card-front">
+          <div class="word-main">${en}</div>
+          <button class="speak-btn" onclick="event.stopPropagation();speak('${en.replace(/'/g,"\\'")}')" title="发音">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </button>
+        </div>
+        <div class="card-face card-back">
+          <div class="meaning-word">${en}</div>
+          <div class="meaning-main">${cn}</div>
+          <button class="speak-btn dark" onclick="event.stopPropagation();speak('${en.replace(/'/g,"\\'")}')" title="发音">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="ans-area" class="answer-area" style="display:none">
+      <div class="answer-grid">
+        <button class="ans-btn ans-known" onclick="answer('known')">认识<small>永久移除</small></button>
+        <button class="ans-btn ans-easy"  onclick="answer('easy')">简单<small>2天后复习</small></button>
+        <button class="ans-btn ans-hard"  onclick="answer('hard')">困难<small>明天复习</small></button>
+        <button class="ans-btn ans-rep"   onclick="answer('repeat')">重复<small>今天再来</small></button>
+      </div>
+    </div>`;
+
+  if (settings.autoPlay) setTimeout(()=>speak(word.english), 350);
+}
+
+function flipCard() {
+  cardFlipped = !cardFlipped;
+  document.getElementById('card-inner')?.classList.toggle('flipped', cardFlipped);
+  const area = document.getElementById('ans-area');
+  if (area) area.style.display = cardFlipped ? 'block' : 'none';
+}
+
+function continueMore() {
+  const before = session.queue.length;
+  buildQueue(true);
+  const added = session.queue.length - before;
+  if (added === 0) { toast('没有更多新词了'); return; }
+  saveSess();
+  renderStudy();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER: WORD BANK
+// ─────────────────────────────────────────────────────────────
+function renderWordBank() {
+  const list  = document.getElementById('word-list');
+  const query = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+  let filtered = words.filter(w =>
+    !query ||
+    w.english.toLowerCase().includes(query) ||
+    w.chinese.toLowerCase().includes(query)
+  );
+  filtered.sort((a,b)=>{ const o={new:0,learning:1,known:2}; return o[a.status]-o[b.status]||(a.english.localeCompare(b.english)); });
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <h3>${query?'没有找到匹配的单词':'单词本是空的'}</h3>
+      <p>${query?'换个关键词试试':'点右下角 + 添加单词'}</p>
+    </div>`;
+    return;
+  }
+
+  const badgeMap = { new:['badge-new','新词'], learning:['badge-learning','学习中'], known:['badge-known','已掌握'] };
+  list.innerHTML = filtered.map(w=>{
+    const [bc,bl] = badgeMap[w.status]||['badge-new','新词'];
+    return `<div class="word-item">
+      <div class="word-info">
+        <div class="word-en">${esc(w.english)}</div>
+        <div class="word-cn">${esc(w.chinese)}</div>
+      </div>
+      <span class="badge ${bc}">${bl}</span>
+      <button class="icon-btn" onclick="openEditModal('${w.id}')" title="编辑">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="icon-btn danger" onclick="deleteWord('${w.id}')" title="删除">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER: STATS
+// ─────────────────────────────────────────────────────────────
+function renderStats() {
+  const el = document.getElementById('view-stats');
+  const total    = words.length;
+  const known    = words.filter(w=>w.status===ST.KNOWN).length;
+  const learning = words.filter(w=>w.status===ST.LEARNING).length;
+  const nw       = words.filter(w=>w.status===ST.NEW).length;
+  const dueNow   = words.filter(w=>w.status===ST.LEARNING && isDue(w.nextReview)).length;
+
+  const histHtml = history.length ? `
+    <div class="sec-title">历史记录</div>
+    ${history.slice().reverse().slice(0,14).map(h=>`
+      <div class="hist-row">
+        <div><div class="hist-date">${h.date}</div><div class="hist-sub">完成 ${h.done||0} 词 · 新学 ${h.newLearned||0}</div></div>
+        <div class="hist-nums">
+          <div>认识 ${h.stats?.known||0} &nbsp;简单 ${h.stats?.easy||0}</div>
+          <div>困难 ${h.stats?.hard||0} &nbsp;重复 ${h.stats?.repeat||0}</div>
+        </div>
+      </div>`).join('')}` : '';
+
+  el.innerHTML = `
+    <div class="sec-title">今日</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">${session.newLearned}</div><div class="stat-lbl">今日新学</div></div>
+      <div class="stat-card"><div class="stat-val">${session.done.length}</div><div class="stat-lbl">今日完成</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#15803d">${session.stats.known}</div><div class="stat-lbl">标记认识</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#b91c1c">${session.stats.repeat}</div><div class="stat-lbl">重复次数</div></div>
+    </div>
+    <div class="sec-title">总体进度</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">${total}</div><div class="stat-lbl">单词本总数</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#15803d">${known}</div><div class="stat-lbl">已掌握</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#b45309">${learning}</div><div class="stat-lbl">学习中</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:#64748b">${nw}</div><div class="stat-lbl">未开始</div></div>
+    </div>
+    <div class="sec-title">待复习</div>
+    <div class="setting-row" style="margin-bottom:4px">
+      <div><div class="setting-lbl">${dueNow}</div><div class="setting-sub">今日到期的复习词</div></div>
+      <div style="text-align:right"><div class="setting-lbl">${session.queue.length}</div><div class="setting-sub">今日待学</div></div>
+    </div>
+    ${histHtml}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER: SETTINGS
+// ─────────────────────────────────────────────────────────────
+function renderSettings() {
+  const el = document.getElementById('view-settings');
+  el.innerHTML = `
+    <div class="sec-title">学习设置</div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">每日新词数量</div><div class="setting-sub">每天学习的新单词上限</div></div>
+      <div class="num-wrap">
+        <button class="num-btn" onclick="changeDaily(-5)">−</button>
+        <span class="num-val" id="daily-val">${settings.dailyNew}</span>
+        <button class="num-btn" onclick="changeDaily(5)">+</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">自动播放发音</div><div class="setting-sub">翻到新卡片时自动朗读</div></div>
+      <button class="toggle ${settings.autoPlay?'on':''}" id="ap-toggle" onclick="toggleAutoPlay()"></button>
+    </div>
+
+    <div class="sec-title">数据管理</div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">导出单词本</div><div class="setting-sub">备份为 JSON 文件</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="exportData()">导出</button>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">导入单词本</div><div class="setting-sub">从 JSON 文件导入（自动去重）</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('imp').click()">导入</button>
+      <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(this)">
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-lbl">重置今日进度</div><div class="setting-sub">清空今天的学习记录，重新开始</div></div>
+      <button class="btn btn-danger btn-sm" onclick="resetToday()">重置</button>
+    </div>`;
+}
+
+function changeDaily(d) {
+  settings.dailyNew = Math.max(1, Math.min(200, settings.dailyNew+d));
+  const el = document.getElementById('daily-val');
+  if (el) el.textContent = settings.dailyNew;
+  saveSett();
+}
+
+function toggleAutoPlay() {
+  settings.autoPlay = !settings.autoPlay;
+  const btn = document.getElementById('ap-toggle');
+  if (btn) btn.classList.toggle('on', settings.autoPlay);
+  saveSett();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify({words,settings},null,2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), {href:url, download:`vocab_${todayStr()}.json`});
+  a.click(); URL.revokeObjectURL(url);
+  toast('导出成功');
+}
+
+function importData(inp) {
+  const file = inp.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.words)) throw new Error();
+      let added = 0;
+      data.words.forEach(w => {
+        if (!words.find(x=>x.english.toLowerCase()===w.english.toLowerCase())) {
+          words.push({ id:genId(), english:w.english, chinese:w.chinese, status:w.status||ST.NEW, nextReview:w.nextReview||null, addedDate:w.addedDate||todayStr() });
+          added++;
+        }
+      });
+      saveWords(); renderWordBank();
+      toast(`导入完成，新增 ${added} 个单词`);
+    } catch { toast('导入失败，请检查文件格式'); }
+  };
+  r.readAsText(file); inp.value='';
+}
+
+function resetToday() {
+  if (!confirm('确定重置今日进度？已标记"认识"的单词不受影响。')) return;
+  session = { date:todayStr(), queue:[], repeatIds:[], done:[], newLearned:0, stats:{known:0,easy:0,hard:0,repeat:0} };
+  buildQueue(false); saveSess();
+  if (currentView==='study') renderStudy();
+  toast('今日进度已重置');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  WORD MANAGEMENT
+// ─────────────────────────────────────────────────────────────
+function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+function modalHtml(title, enVal, cnVal, saveCall) {
+  return `
+    <h3>${title}</h3>
+    <div class="form-group">
+      <label class="form-label">英文单词</label>
+      <input class="form-input" id="fi-en" type="text" value="${esc(enVal)}" placeholder="例：apple" autocomplete="off">
+      <div class="form-error" id="fe-en"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">中文释义</label>
+      <input class="form-input" id="fi-cn" type="text" value="${esc(cnVal)}" placeholder="例：苹果" autocomplete="off">
+      <div class="form-error" id="fe-cn"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="${saveCall}">保存</button>
+    </div>`;
+}
+
+function openAddModal() {
+  document.getElementById('modal-box').innerHTML = modalHtml('添加单词','','','saveAdd()');
+  document.getElementById('modal-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('fi-en')?.focus(),80);
+}
+
+function openEditModal(id) {
+  const w = words.find(x=>x.id===id); if(!w) return;
+  document.getElementById('modal-box').innerHTML = modalHtml('编辑单词',w.english,w.chinese,`saveEdit('${id}')`);
+  document.getElementById('modal-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('fi-en')?.focus(),80);
+}
+
+function validateForm(excludeId) {
+  const en = document.getElementById('fi-en').value.trim();
+  const cn = document.getElementById('fi-cn').value.trim();
+  let ok = true;
+  if (!en) { setErr('fe-en','fi-en','请输入英文单词'); ok=false; }
+  else {
+    const dup = words.find(w=>w.english.toLowerCase()===en.toLowerCase() && w.id!==excludeId);
+    if (dup) { setErr('fe-en','fi-en','该单词已存在'); ok=false; }
+    else clearErr('fe-en','fi-en');
+  }
+  if (!cn) { setErr('fe-cn','fi-cn','请输入中文释义'); ok=false; }
+  else clearErr('fe-cn','fi-cn');
+  return ok ? {en,cn} : null;
+}
+
+function setErr(errId, inpId, msg) {
+  const e=document.getElementById(errId); if(e){e.textContent=msg;e.style.display='block';}
+  document.getElementById(inpId)?.classList.add('err');
+}
+function clearErr(errId, inpId) {
+  const e=document.getElementById(errId); if(e) e.style.display='none';
+  document.getElementById(inpId)?.classList.remove('err');
+}
+
+function saveAdd() {
+  const v = validateForm(null); if(!v) return;
+  words.push({ id:genId(), english:v.en, chinese:v.cn, status:ST.NEW, nextReview:null, addedDate:todayStr() });
+  saveWords(); closeModal(); renderWordBank(); toast(`"${v.en}" 已添加`);
+}
+
+function saveEdit(id) {
+  const v = validateForm(id); if(!v) return;
+  const w = words.find(x=>x.id===id); if(!w) return;
+  w.english=v.en; w.chinese=v.cn;
+  saveWords(); closeModal(); renderWordBank(); toast('修改已保存');
+}
+
+function deleteWord(id) {
+  const w = words.find(x=>x.id===id); if(!w) return;
+  if (!confirm(`确定删除 "${w.english}"？`)) return;
+  words = words.filter(x=>x.id!==id);
+  session.queue     = session.queue.filter(x=>x!==id);
+  session.repeatIds = session.repeatIds.filter(x=>x!==id);
+  session.done      = session.done.filter(x=>x!==id);
+  saveWords(); saveSess(); renderWordBank();
+  if (currentView==='study') renderStudy();
+  toast(`"${w.english}" 已删除`);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MODAL / NAVIGATION / UTILS
+// ─────────────────────────────────────────────────────────────
+function handleOverlayClick(e) { if(e.target===document.getElementById('modal-overlay')) closeModal(); }
+function closeModal() { document.getElementById('modal-overlay').style.display='none'; }
+
+function showView(name) {
+  currentView = name;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.getElementById('nb-'+name)?.classList.add('active');
+  document.getElementById('fab').style.display = name==='wordbank' ? 'flex' : 'none';
+  if      (name==='study')    renderStudy();
+  else if (name==='wordbank') renderWordBank();
+  else if (name==='stats')    renderStats();
+  else if (name==='settings') renderSettings();
+}
+
+let _toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (currentView!=='study' || document.getElementById('modal-overlay').style.display==='flex') return;
+  const word = currentWord();
+  if (!word) return;
+  if (e.key===' ' || e.key==='Enter') { e.preventDefault(); flipCard(); }
+  if (!cardFlipped) return;
+  if (e.key==='1') answer('known');
+  if (e.key==='2') answer('easy');
+  if (e.key==='3') answer('hard');
+  if (e.key==='4') answer('repeat');
+});
+
+// ─────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────
+loadAll();
+// Pre-populate default vocabulary if word bank is empty
+if (words.length === 0) {
+  words = [{"id": "19e5f9804a1nkd6m8", "english": "head", "chinese": "头", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1elvpb9", "english": "face", "chinese": "面", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1pncsod", "english": "orifice", "chinese": "orifice（窍）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1lvh8s0", "english": "mouth", "chinese": "口", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1arpiqj", "english": "eye", "chinese": "目（眼睛）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1yzn7ym", "english": "ear", "chinese": "耳", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1zzlzr5", "english": "nose", "chinese": "鼻", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1yriqjo", "english": "tongue", "chinese": "舌", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1itkxcb", "english": "lip", "chinese": "唇", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1bagqtq", "english": "tooth", "chinese": "牙齿", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a16u54bu", "english": "gum", "chinese": "龈（牙龈）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1awtvsw", "english": "pharynx", "chinese": "咽（咽喉）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a138y9fd", "english": "throat", "chinese": "喉（喉咙）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1nmb3lr", "english": "body", "chinese": "身体", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a19xq18g", "english": "joint", "chinese": "关节", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ons1jf", "english": "tendon", "chinese": "肌腱", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a18kkjtl", "english": "muscle", "chinese": "肉（肌肉）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1eas1lt", "english": "neck", "chinese": "颈项", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1rudw70", "english": "back", "chinese": "背", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14vvip1", "english": "chest", "chinese": "胸", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ice4ji", "english": "waist", "chinese": "腰（下背部）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1i2zneo", "english": "wrist", "chinese": "腕（手腕）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1kak4rg", "english": "abdomen", "chinese": "腹", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vf4sox", "english": "anus", "chinese": "肛（肛门）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1c8vglb", "english": "elbow", "chinese": "肘（手肘）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1o5douy", "english": "malleolus", "chinese": "踝（踝骨）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1az35d0", "english": "limb", "chinese": "肢（四肢）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1jqwdo1", "english": "nail", "chinese": "甲（指甲）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ixpzux", "english": "hair", "chinese": "毛发", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1b6tec6", "english": "skin", "chinese": "皮肤", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1sj820s", "english": "skin texture", "chinese": "腠理（皮肤纹理）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10lyi8c", "english": "heart", "chinese": "心", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1yzyego", "english": "liver", "chinese": "肝", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1sge9jh", "english": "spleen", "chinese": "脾", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1sfpb2k", "english": "lung", "chinese": "肺", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1kxcvdu", "english": "kidney", "chinese": "肾", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1rsnjiu", "english": "gallbladder", "chinese": "胆", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vtigj4", "english": "stomach", "chinese": "胃", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1e6vdh0", "english": "intestine", "chinese": "肠", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a19873mq", "english": "urinary bladder", "chinese": "膀胱", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a16gur65", "english": "traditional Chinese medicine", "chinese": "传统中医", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1xlidj0", "english": "acupuncturist", "chinese": "针灸师", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ln6bn4", "english": "therapist", "chinese": "治疗师", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ydtdx8", "english": "massage therapist", "chinese": "按摩师", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a17akhdu", "english": "acupuncture point", "chinese": "穴位", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a13fxa9i", "english": "medical centre", "chinese": "医疗中心", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1p4engy", "english": "cupping", "chinese": "拔罐", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1lmg20s", "english": "electro acupuncture", "chinese": "电针", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a133d025", "english": "E-stim", "chinese": "电刺激（缩写）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vl1abe", "english": "L-stim", "chinese": "光刺激（缩写）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1h7qtwm", "english": "light therapy", "chinese": "光疗", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1un61ha", "english": "infrared light", "chinese": "红外线烤灯", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1s3tn7g", "english": "unblock", "chinese": "疏通", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a171i0fh", "english": "dredge the meridians", "chinese": "疏通经络", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1z22sfp", "english": "stimulate blood circulation", "chinese": "促进血液循环", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14vhpfw", "english": "regulate", "chinese": "调节", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1dze9f4", "english": "coagulate", "chinese": "凝结", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14a26l2", "english": "relieve", "chinese": "减少/缓解", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1emdkmm", "english": "alleviate", "chinese": "缓解/减轻", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a18wtxkx", "english": "nerve function recovery", "chinese": "神经功能恢复", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1t9qol1", "english": "symptoms", "chinese": "症状", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10di19u", "english": "fluid", "chinese": "液体", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1fviq83", "english": "acute", "chinese": "急性的", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vndbtc", "english": "chronic", "chinese": "慢性的", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vvis2i", "english": "seasick", "chinese": "晕船的", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1p6am1t", "english": "carsick", "chinese": "晕车的", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ydb0f8", "english": "pain disorders", "chinese": "疼痛疾病", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10qin4a", "english": "pain management", "chinese": "疼痛管理", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a19n6ejo", "english": "neck and shoulder pain", "chinese": "颈肩痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1pjxay5", "english": "cervical spondylosis", "chinese": "颈椎病", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1c9ejpx", "english": "upper back pain", "chinese": "背痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a184k7su", "english": "low back pain", "chinese": "腰痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a12arqlu", "english": "costal pain", "chinese": "胁痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a12h7rk3", "english": "back of leg pain", "chinese": "腿后侧痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a11ogggv", "english": "side of leg pain", "chinese": "腿侧边痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1xaaw7u", "english": "hip pain", "chinese": "臀痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14v33tc", "english": "knee pain", "chinese": "膝痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1mn8nlr", "english": "elbow pain", "chinese": "肘痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a13g374s", "english": "joint pain", "chinese": "关节痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a151m1d0", "english": "sprain ankle", "chinese": "脚踝扭伤", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1435fv1", "english": "sprain elbow", "chinese": "肘扭伤", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a138yd5z", "english": "tendinitis", "chinese": "跟腱炎/肌腱炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1g3vhjh", "english": "frozen shoulder", "chinese": "肩周炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ayzc43", "english": "carpal tunnel syndrome", "chinese": "腕管综合征", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1o3ly8b", "english": "lumbar disc herniation", "chinese": "腰椎间盘突出", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1jvxolh", "english": "stroke hemiplegia", "chinese": "中风偏瘫", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1kai2rf", "english": "facial paralysis", "chinese": "面瘫", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1dwk68e", "english": "sciatica", "chinese": "坐骨神经痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1tj23ej", "english": "trigeminal neuralgia", "chinese": "三叉神经痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1mcsm8p", "english": "hiccup", "chinese": "打嗝", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a12anm4s", "english": "nausea", "chinese": "恶心", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1unkru1", "english": "vomiting", "chinese": "呕吐", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10ia90z", "english": "stomachache", "chinese": "胃痛/肚子痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1fphlk8", "english": "abdominal distention", "chinese": "腹胀", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1n2j716", "english": "abdominal pain", "chinese": "腹痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a13npv6e", "english": "bloating", "chinese": "腹胀/胃胀气", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14hk12c", "english": "diarrhea", "chinese": "腹泻", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ah9mnv", "english": "constipation", "chinese": "便秘", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a16zxtcm", "english": "esophagitis", "chinese": "食管炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1mp5nes", "english": "gastritis", "chinese": "胃炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1xkube4", "english": "colitis", "chinese": "结肠炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a11asifc", "english": "dysentery", "chinese": "痢疾", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1wty0kd", "english": "loose stool", "chinese": "便溏/稀便", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1i1dl9x", "english": "gastrointestinal", "chinese": "胃肠的", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a151zxbu", "english": "common cold", "chinese": "普通感冒", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1pj17r8", "english": "flu", "chinese": "流感", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1l5vkl1", "english": "asthma", "chinese": "哮喘", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1vfnxry", "english": "bronchitis", "chinese": "支气管炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10teubt", "english": "pneumonia", "chinese": "肺炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1t9zo0s", "english": "pharyngitis", "chinese": "咽喉炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a17kvs6p", "english": "rhinitis", "chinese": "鼻炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1zh3nlk", "english": "pneumothorax", "chinese": "气胸", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1xclegp", "english": "tonsillitis", "chinese": "扁桃体发炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1idjthn", "english": "sore throat", "chinese": "喉咙痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1jhm3qz", "english": "gynecological diseases", "chinese": "妇科病", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ee365q", "english": "irregular menstruation", "chinese": "月经不调", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ir7b01", "english": "premature menstruation", "chinese": "月经提前", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1tank52", "english": "menstruation delayed", "chinese": "月经延后", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1xb7mh9", "english": "premenstrual syndrome", "chinese": "经前综合症（PMS）", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14jv0ex", "english": "dysmenorrhea", "chinese": "痛经", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1zkbwy9", "english": "amenorrhea", "chinese": "闭经", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14nyqe6", "english": "inflammation", "chinese": "炎症", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1889mtz", "english": "infertility", "chinese": "不孕", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ccptw1", "english": "mastitis", "chinese": "乳腺炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a174xp7h", "english": "pelvic inflammatory disease", "chinese": "盆腔炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1t2q047", "english": "leucorrhea", "chinese": "白带增多", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1o028h9", "english": "menopause", "chinese": "更年期", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1m95lo5", "english": "perimenopausal syndrome", "chinese": "更年期综合征", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1mtp2gn", "english": "urinary tract infection", "chinese": "尿路感染", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a14cje5s", "english": "frequent urination", "chinese": "尿频", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1irgkmm", "english": "urinary incontinence", "chinese": "尿失禁", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a131rn3i", "english": "hematuria", "chinese": "血尿", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ae0x9h", "english": "urinary retention", "chinese": "尿潴留", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1clnuig", "english": "impotence", "chinese": "阳痿", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a195c12o", "english": "premature ejaculation", "chinese": "早泄", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1zes1kw", "english": "cystitis", "chinese": "膀胱炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a10fp36w", "english": "swelling", "chinese": "水肿", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a179ttjy", "english": "diabetes", "chinese": "糖尿病", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1z8asm8", "english": "thyroid", "chinese": "甲状腺", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1sybxzf", "english": "Hashimoto thyroiditis", "chinese": "桥本甲状腺炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1uu38yc", "english": "hyperthyroidism", "chinese": "甲状腺功能亢进", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1scebfb", "english": "hypothyroidism", "chinese": "甲状腺功能减退", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1yxxycd", "english": "obesity", "chinese": "肥胖症", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ve2fjt", "english": "rheumatoid arthritis", "chinese": "类风湿关节炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1a1yiw7", "english": "rheumatism", "chinese": "风湿病", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1n65brl", "english": "myopia", "chinese": "近视", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1ff578y", "english": "cataract", "chinese": "白内障", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1md5uky", "english": "conjunctivitis", "chinese": "结膜炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a16qs4tz", "english": "otitis media", "chinese": "中耳炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1dcuvku", "english": "tinnitus", "chinese": "耳鸣", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a15yboty", "english": "deafness", "chinese": "耳聋", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1tde8sf", "english": "toothache", "chinese": "牙痛", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1qlduip", "english": "sinusitis", "chinese": "鼻窦炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1kvcbgg", "english": "seasonal allergic rhinitis", "chinese": "季节性过敏性鼻炎", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a11bol7q", "english": "manifest", "chinese": "显现/表现", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1a94lki", "english": "infection", "chinese": "感染", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a17ylsn5", "english": "medial malleolus", "chinese": "内踝", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}, {"id": "19e5f9804a1n0z49p", "english": "lateral malleolus", "chinese": "外踝", "status": "new", "nextReview": null, "addedDate": "2026-05-25"}];
+  saveWords();
+}
+initSession();
+renderStudy();
+renderSettings();
+</script>
+</body>
+</html>
