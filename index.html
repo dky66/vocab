@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>背单词</title>
+  <script src="https://code.responsivevoice.org/responsivevoice.js?key=FREE"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -476,38 +477,27 @@ function answer(action) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SPEECH  (跨设备兼容：优先 Google TTS，回退系统 TTS)
+//  SPEECH  (ResponsiveVoice → Web Speech API 双重保险)
 // ─────────────────────────────────────────────────────────────
-let _currentAudio = null;
-
 function speak(text) {
   if (!text) return;
-
-  // Stop any current playback
-  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+  // Stop current Web Speech
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 
-  // Method 1: Google Translate TTS (works on any device with internet, no install needed)
-  const url = 'https://translate.google.com/translate_tts?ie=UTF-8&tl=en-US&client=tw-ob&q='
-              + encodeURIComponent(text);
-  const audio = new Audio(url);
-  audio.playbackRate = 0.9;
-  _currentAudio = audio;
-  audio.play().catch(() => {
-    // Method 2: Fallback to Web Speech API if Google TTS fails
-    _speakFallback(text);
-  });
-}
-
-function _speakFallback(text) {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US'; u.rate = 0.88;
-  const voices = window.speechSynthesis.getVoices();
-  const v = voices.find(x => x.lang === 'en-US') || voices.find(x => x.lang.startsWith('en'));
-  if (v) u.voice = v;
-  window.speechSynthesis.speak(u);
+  // Primary: ResponsiveVoice (CDN-based, works on all mobile browsers, no install needed)
+  if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
+    responsiveVoice.speak(text, 'US English Female', { rate: 0.9 });
+    return;
+  }
+  // Fallback: Web Speech API (works if device has English TTS installed)
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.88;
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(x => x.lang === 'en-US') || voices.find(x => x.lang.startsWith('en'));
+    if (v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
