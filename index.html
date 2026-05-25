@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>背单词</title>
-  <script src="https://code.responsivevoice.org/responsivevoice.js?key=FREE"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -477,26 +476,40 @@ function answer(action) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SPEECH  (ResponsiveVoice → Web Speech API 双重保险)
+//  SPEECH  (有道词典 TTS — 支持微信浏览器，无需账号，中国可用)
 // ─────────────────────────────────────────────────────────────
+// 复用同一个 audio 元素，避免微信浏览器的兼容问题
+let _ttsAudio = null;
+function _getTTSAudio() {
+  if (!_ttsAudio) {
+    _ttsAudio = document.createElement('audio');
+    _ttsAudio.preload = 'none';
+    document.body.appendChild(_ttsAudio);
+  }
+  return _ttsAudio;
+}
+
 function speak(text) {
   if (!text) return;
-  // Stop current Web Speech
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 
-  // Primary: ResponsiveVoice (CDN-based, works on all mobile browsers, no install needed)
-  if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
-    responsiveVoice.speak(text, 'US English Female', { rate: 0.9 });
-    return;
-  }
-  // Fallback: Web Speech API (works if device has English TTS installed)
-  if ('speechSynthesis' in window) {
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.88;
-    const voices = window.speechSynthesis.getVoices();
-    const v = voices.find(x => x.lang === 'en-US') || voices.find(x => x.lang.startsWith('en'));
-    if (v) u.voice = v;
-    window.speechSynthesis.speak(u);
+  const audio = _getTTSAudio();
+  audio.pause();
+  // 有道词典 TTS：中国可访问，支持英文单词和短语，微信浏览器兼容
+  audio.src = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=2';
+  audio.load();
+  const p = audio.play();
+  if (p && p.catch) {
+    p.catch(() => {
+      // 回退：Web Speech API（桌面浏览器 / 有英文语音包的手机）
+      if ('speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US'; u.rate = 0.88;
+        const v = speechSynthesis.getVoices().find(x => x.lang.startsWith('en'));
+        if (v) u.voice = v;
+        speechSynthesis.speak(u);
+      }
+    });
   }
 }
 
